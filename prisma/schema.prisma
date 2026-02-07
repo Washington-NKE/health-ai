@@ -1,0 +1,253 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  emailVerified DateTime?
+  password      String?
+  phone         String?
+  firstName     String?
+  lastName      String?
+  role          UserRole  @default(patient)
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+
+  // Relations for application models
+  patient Patient[]
+  doctor  Doctor[]
+  staff   Staff[]
+
+  // Relations required by Auth.js Prisma adapter
+  accounts Account[]
+  sessions Session[]
+
+  @@map("users")
+}
+
+enum UserRole {
+  patient
+  doctor
+  admin
+  staff
+}
+
+enum StaffRole {
+  receptionist
+  nurse
+}
+
+model Patient {
+  id                    String        @id @default(cuid())
+  user                  User          @relation(fields: [userId], references: [id])
+  userId                String        @unique
+  firstName             String
+  lastName              String
+  dateOfBirth           DateTime
+  gender                String?
+  bloodType             String?
+  address               String?
+  emergencyContactName  String?
+  emergencyContactPhone String?
+  insuranceProvider     String?
+  insurancePolicyNumber String?
+  appointment           Appointment[]
+  billings              Billing[]
+  prescriptions         Prescription[]
+  labResults            LabResult[]
+
+  @@map("patients")
+}
+
+model Hospital {
+  id          String    @id @default(cuid())
+  name        String
+  address     String?
+  phone       String?
+  email       String?
+  website     String?
+  departments String[]  @default([])
+  doctors     Doctor[]
+  staff       Staff[]
+  createdAt   DateTime  @default(now())
+
+  @@map("hospitals")
+}
+
+model Staff {
+  id          String    @id @default(cuid())
+  user        User      @relation(fields: [userId], references: [id])
+  userId      String    @unique
+  hospital    Hospital? @relation(fields: [hospitalId], references: [id])
+  hospitalId  String?
+  role        StaffRole @default(receptionist)
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+
+  @@map("staff")
+}
+
+model Doctor {
+  id              String          @id @default(cuid())
+  user            User            @relation(fields: [userId], references: [id])
+  userId          String          @unique
+  verified        Boolean         @default(false)
+  firstName       String
+  lastName        String
+  specialization  String
+  licenseNumber   String
+  department      String?
+  consultationFee Float?
+  bio             String?
+  isAvailable     Boolean         @default(true)
+  hospitalId      String?
+  hospital        Hospital?       @relation(fields: [hospitalId], references: [id])
+  appointment     Appointment[]
+  prescriptions   Prescription[]
+  labResults      LabResult[]
+  availability    Availability[]
+
+  @@map("doctors")
+}
+
+model Availability {
+  id        String   @id @default(cuid())
+  doctor    Doctor   @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  doctorId  String
+  dayOfWeek Int      // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+  startTime String   // "09:00" HH:MM format
+  endTime   String   // "17:00" HH:MM format
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@map("availabilities")
+}
+
+model Billing {
+  id           String   @id @default(cuid())
+  patient      Patient  @relation(fields: [patientId], references: [id])
+  patientId    String
+  amount       Float
+  currency     String   @default("USD")
+  status       BillingStatus @default(pending)
+  description  String?
+  issuedAt     DateTime @default(now())
+  paidAt       DateTime?
+
+  @@map("billings")
+}
+
+enum BillingStatus {
+  pending
+  paid
+  refunded
+  cancelled
+}
+
+model Prescription {
+  id           String   @id @default(cuid())
+  patient      Patient  @relation(fields: [patientId], references: [id])
+  patientId    String
+  doctor       Doctor   @relation(fields: [doctorId], references: [id])
+  doctorId     String
+  medication   String
+  dosage       String?
+  frequency    String?
+  instructions String?
+  issuedAt     DateTime @default(now())
+  expiresAt    DateTime?
+
+  @@map("prescriptions")
+}
+
+model LabResult {
+  id           String   @id @default(cuid())
+  patient      Patient  @relation(fields: [patientId], references: [id])
+  patientId    String
+  doctor       Doctor?  @relation(fields: [doctorId], references: [id])
+  doctorId     String?
+  type         String
+  result       String
+  units        String?
+  referenceRange String?
+  collectedAt  DateTime?
+  reportedAt   DateTime @default(now())
+  labNotes        String?
+
+  @@map("lab_results")
+}
+
+model Appointment {
+  id              String            @id @default(cuid())
+  patientId       String
+  doctorId        String
+  appointmentDate DateTime
+  durationMinutes Int
+  status          AppointmentStatus @default(pending)
+  reason          String?
+  notes           String?  @default("")
+
+  patient Patient? @relation(fields: [patientId], references: [id])
+  doctor  Doctor?  @relation(fields: [doctorId], references: [id])
+
+  @@map("appointments")
+}
+
+enum AppointmentStatus {
+  pending
+  scheduled
+  confirmed
+  cancelled
+  completed
+  no_show
+}
+
+// Models required by Auth.js Prisma adapter
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  id         String   @id @default(cuid())
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+
