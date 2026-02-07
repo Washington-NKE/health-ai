@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-// @ts-expect-error - bcryptjs type issue
 import bcrypt from "bcryptjs";
 
 export async function POST(req: Request) {
